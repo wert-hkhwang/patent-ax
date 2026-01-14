@@ -1769,9 +1769,13 @@ async def get_visualization_stats():
 # 공공 AX API 라우터 등록
 # ========================================
 from api.routers.ax_api import router as ax_router
+from api.routers.user import router as user_router
 
 # 공공 AX API 라우터 추가 (Chat, Map, Analyze 엔드포인트)
 app.include_router(ax_router)
+
+# 사용자 프로필 및 리터러시 레벨 관리 라우터
+app.include_router(user_router)
 
 
 if __name__ == "__main__":
