@@ -899,13 +899,15 @@ def retrieve_rag(state: AgentState) -> AgentState:
             if graph_strategy in [GraphRAGStrategy.GRAPH_ONLY, GraphRAGStrategy.HYBRID, GraphRAGStrategy.GRAPH_ENHANCED]:
                 try:
                     # Phase 98: graph_builder 초기화 상태 명시적 확인
+                    # Patent-AX: cuGraph Graceful Degradation - 서비스 불가 시 벡터만 사용
                     if not graph_rag.graph_builder:
                         logger.info("Phase 98: graph_builder 미초기화 감지, 초기화 수행...")
                         try:
                             graph_rag.initialize(graph_id="713365bb", project_limit=500)
                             logger.info("Phase 98: graph_builder 초기화 완료")
                         except Exception as init_e:
-                            logger.warning(f"Phase 98: graph_builder 초기화 실패: {init_e}")
+                            logger.warning(f"⚠️ Patent-AX Graceful Degradation: cuGraph 서비스 접근 불가 - {init_e}")
+                            logger.warning(f"   → 벡터 검색만 사용하여 계속 진행")
 
                     if graph_rag.graph_builder:
                         graph_results = graph_rag._graph_search(
@@ -917,9 +919,11 @@ def retrieve_rag(state: AgentState) -> AgentState:
                         )
                         logger.info(f"Phase 95: cuGraph 검색 완료: {len(graph_results)}건")
                     else:
-                        logger.warning("Phase 98: graph_builder 초기화 불가, 그래프 검색 스킵")
+                        logger.warning("⚠️ Patent-AX Graceful Degradation: graph_builder 초기화 불가")
+                        logger.warning("   → 그래프 검색 스킵, 벡터 검색만 사용")
                 except Exception as e:
-                    logger.warning(f"Phase 95: cuGraph 검색 실패 (벡터만 사용): {e}")
+                    logger.warning(f"⚠️ Patent-AX Graceful Degradation: cuGraph 검색 실패 - {e}")
+                    logger.warning(f"   → 벡터 검색 결과만 사용하여 계속 진행")
                     graph_results = []
 
             # 3. 벡터 + 그래프 결과 RRF 병합
