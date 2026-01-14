@@ -1,9 +1,34 @@
 # Patent-AX 사용자 수준별 특허 정보 제공 시스템 구현 계획서
 
 **작성일**: 2026-01-14
+**최종 수정**: 2026-01-14 (v1.1 - 사용자 레벨 설정 방식 변경)
 **대상 시스템**: Patent-AX v1.0.0
 **PlutoLM 대체**: EXAONE-4.0.1-32B (이미 적용됨)
 **문서 변환**: 폴라리스 솔루션 별도 구축 예정
+
+## 📝 변경 이력
+
+### v1.1 (2026-01-14) - 사용자 레벨 설정 방식 개선
+**변경 사유**: 자동 감지 방식의 정확도 문제 및 불필요한 복잡도 제거
+
+**주요 변경사항**:
+- ❌ **제거**: 대화 기반 자동 리터러시 레벨 감지 (2.0 M/M 절감)
+- ✅ **채택**: 가입 시 학력/직업 기반 기본 레벨 설정
+- ✅ **추가**: UI 헤더 드롭다운으로 언제든 레벨 전환 가능
+- ✅ **추가**: 레벨 변경 이력 추적 (선택사항)
+- ✅ **추가**: 레벨별 사용 통계 분석 대시보드 (Phase 3)
+
+**공수 변화**:
+- Phase 3: 10.5 M/M → 10.0 M/M (-0.5 M/M)
+- **전체**: 23.5 M/M → 23.0 M/M (-0.5 M/M)
+
+**개선 효과**:
+1. 정확도 향상: 사용자가 직접 선택하므로 100% 정확
+2. 복잡도 감소: LLM 기반 분류기 불필요
+3. 유연성 증가: 고등학생 중 전문가도 전문가 모드 선택 가능
+4. 비용 절감: 추가 LLM 호출 불필요
+
+### v1.0 (2026-01-14) - 초안 작성
 
 ---
 
@@ -48,24 +73,32 @@
 
 ```mermaid
 flowchart LR
-    User[사용자] --> Route{모드 선택}
-    Route -->|L1 학생| Easy[Easy Mode<br/>쉬운 챗봇]
-    Route -->|L2-L6| Normal[Normal Mode<br/>수준별 맞춤]
+    User[사용자] --> Register[가입/프로필 설정]
+    Register --> SelectLevel{기본 레벨 선택}
 
-    Easy --> E1[대화창만]
-    Easy --> E2[추천 질문]
-    Easy --> E3[용어 팝업]
+    SelectLevel -->|초등/중등/고등| L1[L1 또는 L2]
+    SelectLevel -->|대학생/대학원생| L2[L2]
+    SelectLevel -->|중소기업 실무자| L3[L3]
+    SelectLevel -->|연구원| L4[L4]
+    SelectLevel -->|변리사/전문가| L5[L5]
+    SelectLevel -->|정책담당자| L6[L6]
 
-    Normal --> N1[검색 + 대화]
-    Normal --> N2[문서 업로드]
-    Normal --> N3[분석 도구]
-    Normal --> N4[수준 자동 감지]
+    L1 --> UI[UI에서 언제든 모드 전환]
+    L2 --> UI
+    L3 --> UI
+    L4 --> UI
+    L5 --> UI
+    L6 --> UI
+
+    UI --> Easy[Easy Mode]
+    UI --> Normal[Normal Mode]
+    UI --> Expert[Expert Mode]
 ```
 
 **요구사항**:
-- [ ] Easy Mode 전용 UI 라우트 (`/easy`)
-- [ ] Normal Mode 수준 선택 UI (L2~L6)
-- [ ] 모드 간 전환 기능
+- [ ] 가입 시 학력/직업 기반 기본 레벨 설정
+- [ ] UI 헤더에 모드 전환 드롭다운 (언제든 변경 가능)
+- [ ] 사용자 프로필에 현재 레벨 저장
 
 #### B. 눈높이 맞춤 응답 생성
 
@@ -83,7 +116,7 @@ flowchart LR
 **현재 상태**:
 - ✅ L1(초등), L2(일반인), L5(전문가) 3단계 구현됨
 - ❌ L3, L4, L6 미구현
-- ❌ 자동 수준 감지 미구현
+- ✅ 가입 기반 레벨 설정 방식 채택 (자동 감지 불필요)
 
 #### C. 관점별 특허 요약
 
@@ -144,8 +177,8 @@ flowchart TB
 | 기능 | 필요 작업 | 우선순위 |
 |------|----------|----------|
 | **6단계 리터러시 확장** | L3~L6 프롬프트 추가 | 높음 |
-| **자동 수준 감지** | LLM 기반 분류기 구현 | 중간 |
-| **Easy Mode UI** | 별도 프론트엔드 라우트 | 높음 |
+| **가입 시 레벨 설정** | 학력/직업 기반 매핑 | 높음 |
+| **UI 모드 전환** | 드롭다운 컴포넌트 | 높음 |
 | **관점별 요약** | 목적/소재/공법/효과 추출 | 높음 |
 | **용어 사전** | 500개 핵심 용어 DB | 높음 |
 | **용어 자동 변환** | 후처리 파이프라인 | 중간 |
@@ -318,14 +351,19 @@ CREATE TABLE f_user_profiles (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(100) UNIQUE NOT NULL,  -- SSO 연동 사용자 ID
 
+    -- 기본 정보 (가입 시 입력)
+    education_level VARCHAR(50),            -- 초등/중등/고등/대학생/대학원생
+    occupation VARCHAR(50),                 -- 학생/중소기업/연구원/변리사/정책담당자
+
     -- 리터러시 레벨
-    declared_level VARCHAR(20),             -- 사용자가 선택한 레벨
-    detected_level VARCHAR(20),             -- AI가 감지한 레벨
-    current_level VARCHAR(20) NOT NULL,     -- 현재 적용 중인 레벨
+    registered_level VARCHAR(20) NOT NULL,  -- 가입 시 설정된 기본 레벨
+    current_level VARCHAR(20) NOT NULL,     -- 현재 사용 중인 레벨 (UI에서 변경 가능)
+
+    -- 레벨 변경 이력 (선택사항)
+    level_change_history JSONB,             -- [{timestamp, from_level, to_level}]
 
     -- 사용 패턴
     interaction_count INT DEFAULT 0,        -- 질의 횟수
-    avg_query_complexity FLOAT,             -- 평균 질의 복잡도
     preferred_topics JSONB,                 -- 선호 기술 분야
 
     -- 학습 이력
@@ -336,6 +374,7 @@ CREATE TABLE f_user_profiles (
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
 
+    CHECK (registered_level IN ('L1', 'L2', 'L3', 'L4', 'L5', 'L6')),
     CHECK (current_level IN ('L1', 'L2', 'L3', 'L4', 'L5', 'L6'))
 );
 
@@ -745,10 +784,10 @@ class ChatAskRequest(BaseModel):
 
 # 확장 (6단계)
 class ChatAskRequestV2(BaseModel):
-    level: Optional[Literal["L1", "L2", "L3", "L4", "L5", "L6"]] = None  # None이면 자동 감지
+    level: Literal["L1", "L2", "L3", "L4", "L5", "L6"]  # 사용자 프로필에서 가져옴
     question: str = Field(..., max_length=2000)
-    user_id: Optional[str] = None  # SSO 연동
-    mode: Literal["easy", "normal"] = "normal"
+    user_id: str  # SSO 연동 (필수)
+    mode: Literal["easy", "normal", "expert"] = "normal"
 
     # 관점별 요약 요청 (선택)
     perspectives: Optional[List[Literal["purpose", "material", "process", "effect"]]] = None
@@ -757,12 +796,28 @@ class ChatAskRequestV2(BaseModel):
 #### B. 신규 엔드포인트
 
 ```python
-@router.post("/chat/detect-level")
-async def detect_literacy_level(request: DetectLevelRequest):
-    """사용자 질의로부터 리터러시 레벨 자동 감지"""
-    detector = LiteracyLevelDetector()
-    detected = await detector.detect(request.question)
-    return {"detected_level": detected, "confidence": 0.85}
+@router.post("/user/set-level")
+async def set_user_level(user_id: str, level: str):
+    """사용자 레벨 변경 (UI 드롭다운에서 호출)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 기존 레벨 조회
+    cursor.execute("SELECT current_level FROM f_user_profiles WHERE user_id = %s", (user_id,))
+    old_level = cursor.fetchone()[0]
+
+    # 레벨 변경
+    cursor.execute("""
+        UPDATE f_user_profiles
+        SET current_level = %s,
+            level_change_history = level_change_history || %s::jsonb,
+            updated_at = NOW()
+        WHERE user_id = %s
+    """, (level, json.dumps([{"timestamp": datetime.now().isoformat(), "from": old_level, "to": level}]), user_id))
+
+    conn.commit()
+    conn.close()
+    return {"success": True, "new_level": level}
 
 @router.post("/chat/perspective-summary")
 async def get_perspective_summary(request: PerspectiveSummaryRequest):
@@ -798,48 +853,63 @@ async def get_term_explanation(term: str, level: str):
 
 ### 6.3 핵심 모듈 설계
 
-#### A. 리터러시 레벨 감지기
+#### A. 사용자 레벨 매핑 로직
 
-**신규 파일**: `workflow/detectors/literacy_detector.py`
+**신규 파일**: `workflow/user/level_mapper.py`
 
 ```python
-class LiteracyLevelDetector:
-    """사용자 질의로부터 리터러시 레벨 자동 감지"""
+class UserLevelMapper:
+    """가입 정보 기반 리터러시 레벨 매핑"""
 
-    COMPLEXITY_INDICATORS = {
-        "L1": ["뭐야", "알려줘", "궁금해", "어떻게", "왜"],
-        "L2": ["논문", "연구", "참고", "선행기술", "조사"],
-        "L3": ["사업화", "경쟁사", "출원 전략", "시장", "적용"],
-        "L4": ["청구항", "권리범위", "IPC", "기술요소", "분석"],
-        "L5": ["신규성", "진보성", "거절이유", "침해", "판례"],
-        "L6": ["동향", "통계", "정책", "국가별", "경쟁력"]
+    LEVEL_MAPPING = {
+        # 학력 기반
+        "초등학생": "L1",
+        "중학생": "L1",
+        "고등학생": "L2",
+        "대학생": "L2",
+        "대학원생": "L2",
+
+        # 직업 기반
+        "중소기업_실무자": "L3",
+        "대기업_R&D": "L4",
+        "연구원": "L4",
+        "변리사": "L5",
+        "심사관": "L5",
+        "특허전문가": "L5",
+        "정책담당자": "L6"
     }
 
-    async def detect(self, question: str) -> str:
-        """질의 복잡도 분석하여 레벨 추정"""
-        # 1. 키워드 매칭 (빠른 판단)
-        for level, keywords in self.COMPLEXITY_INDICATORS.items():
-            if any(kw in question for kw in keywords):
-                return level
+    @classmethod
+    def get_initial_level(cls, education_level: str, occupation: str) -> str:
+        """가입 시 기본 레벨 결정"""
+        # 1. 직업 우선 (더 구체적)
+        if occupation in cls.LEVEL_MAPPING:
+            return cls.LEVEL_MAPPING[occupation]
 
-        # 2. LLM 기반 분류 (불확실한 경우)
-        llm = get_llm_client()
-        prompt = f"""
-        사용자 질문: "{question}"
+        # 2. 학력으로 판단
+        if education_level in cls.LEVEL_MAPPING:
+            return cls.LEVEL_MAPPING[education_level]
 
-        이 질문을 한 사용자의 특허 리터러시 수준을 추정하세요:
-        L1: 학생 (기초 호기심)
-        L2: 대학생 (학술 조사)
-        L3: 중소기업 (실무 적용)
-        L4: 연구자 (기술 분석)
-        L5: 전문가 (법률 검토)
-        L6: 정책담당자 (거시 동향)
+        # 3. 기본값
+        return "L2"  # 일반 사용자
 
-        답변: L1~L6 중 하나만
-        """
+    @classmethod
+    async def create_user_profile(cls, user_id: str, education_level: str, occupation: str):
+        """신규 사용자 프로필 생성"""
+        initial_level = cls.get_initial_level(education_level, occupation)
 
-        result = await llm.generate(prompt, max_tokens=10)
-        return result.strip()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO f_user_profiles (user_id, education_level, occupation, registered_level, current_level)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (user_id, education_level, occupation, initial_level, initial_level))
+
+        conn.commit()
+        conn.close()
+
+        return initial_level
 ```
 
 #### B. 기술요소 추출기
@@ -888,7 +958,52 @@ class TechElementExtractor:
         return all(k in elements for k in required_keys)
 ```
 
-#### C. 용어 변환 후처리기
+#### C. 레벨 전환 UI 컴포넌트
+
+**신규 파일**: `frontend/components/LevelSwitcher.tsx`
+
+```typescript
+interface LevelSwitcherProps {
+  userId: string;
+  currentLevel: string;
+  onLevelChange: (newLevel: string) => void;
+}
+
+export function LevelSwitcher({ userId, currentLevel, onLevelChange }: LevelSwitcherProps) {
+  const levels = [
+    { value: "L1", label: "쉬운 설명 (학생)" },
+    { value: "L2", label: "기본 설명 (대학생)" },
+    { value: "L3", label: "실무 중심 (중소기업)" },
+    { value: "L4", label: "기술 상세 (연구자)" },
+    { value: "L5", label: "전문가 (변리사)" },
+    { value: "L6", label: "정책 동향 (담당자)" }
+  ];
+
+  const handleChange = async (newLevel: string) => {
+    // API 호출: 레벨 변경 저장
+    await fetch("/api/user/set-level", {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId, level: newLevel })
+    });
+
+    onLevelChange(newLevel);
+  };
+
+  return (
+    <div className="level-switcher">
+      <select value={currentLevel} onChange={(e) => handleChange(e.target.value)}>
+        {levels.map((level) => (
+          <option key={level.value} value={level.value}>
+            {level.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+```
+
+#### D. 용어 변환 후처리기
 
 **신규 파일**: `workflow/processors/term_processor.py`
 
@@ -1024,10 +1139,11 @@ export default function ChatPage() {
 | 순위 | 작업 | 담당 | M/M | 비고 |
 |------|------|------|-----|------|
 | 1 | Easy Mode UI 라우팅 | 아프로시스 | 1.5 | /easy 경로 |
-| 2 | 수준 선택 컴포넌트 | 아프로시스 | 1.0 | L1~L6 셀렉터 |
-| 3 | 관점별 요약 UI | 아프로시스 | 2.0 | 목적/소재/공법/효과 탭 |
-| 4 | 용어 팝업 컴포넌트 | 아프로시스 | 1.0 | 클릭 시 설명 표시 |
-| 5 | 추천 질문 UI | 아프로시스 | 0.5 | Easy Mode용 |
+| 2 | 레벨 전환 드롭다운 | 아프로시스 | 0.5 | 헤더 영역, 언제든 변경 가능 |
+| 3 | 가입 시 학력/직업 입력 폼 | 아프로시스 | 0.5 | 레벨 자동 매핑 |
+| 4 | 관점별 요약 UI | 아프로시스 | 2.0 | 목적/소재/공법/효과 탭 |
+| 5 | 용어 팝업 컴포넌트 | 아프로시스 | 1.0 | 클릭 시 설명 표시 |
+| 6 | 추천 질문 UI | 아프로시스 | 0.5 | Easy Mode용 |
 
 **소계: 6.0 M/M**
 
@@ -1035,22 +1151,28 @@ export default function ChatPage() {
 
 | 순위 | 작업 | 담당 | M/M | 비고 |
 |------|------|------|-----|------|
-| 1 | 리터러시 레벨 자동 감지 | Wert | 2.0 | LLM 기반 분류 |
-| 2 | 사용자 프로필 관리 | Wert | 1.5 | 학습 이력 추적 |
-| 3 | 문서 업로드 연동 | 폴라리스 | 3.0 | OCR + 기술요소 추출 |
-| 4 | 관점별 요약 생성 API | Wert | 2.0 | 하이브리드 방식 |
-| 5 | A/B 테스트 및 개선 | 케이원 | 2.0 | 파일럿 피드백 |
+| 1 | 사용자 프로필 관리 | Wert | 1.5 | 학습 이력 추적 |
+| 2 | 문서 업로드 연동 | 폴라리스 | 3.0 | OCR + 기술요소 추출 |
+| 3 | 관점별 요약 생성 API | Wert | 2.0 | 하이브리드 방식 |
+| 4 | A/B 테스트 및 개선 | 케이원 | 2.0 | 파일럿 피드백 |
+| 5 | 레벨별 통계 분석 대시보드 | 아프로시스 | 1.5 | 사용 패턴 분석 |
 
-**소계: 10.5 M/M**
+**소계: 10.0 M/M** (기존 10.5 M/M에서 0.5 M/M 절감)
 
 ### 7.4 총 투입 공수
 
-| Phase | 기간 | M/M |
-|-------|------|-----|
-| Phase 1: 핵심 인프라 | 1~3월 | 7.0 |
-| Phase 2: UI 구현 | 2~4월 | 6.0 |
-| Phase 3: 고도화 | 4~7월 | 10.5 |
-| **합계** | | **23.5 M/M** |
+| Phase | 기간 | M/M | 변경사항 |
+|-------|------|-----|----------|
+| Phase 1: 핵심 인프라 | 1~3월 | 7.0 | - |
+| Phase 2: UI 구현 | 2~4월 | 6.0 | 레벨 전환 드롭다운 추가 (기존 자동 감지 UI 대체) |
+| Phase 3: 고도화 | 4~7월 | 10.0 | **-0.5 M/M** (자동 감지 제거, 통계 대시보드 추가) |
+| **합계** | | **23.0 M/M** | **총 0.5 M/M 절감** |
+
+**주요 변경 사항**:
+- ❌ 제거: 자동 리터러시 레벨 감지 (2.0 M/M → 0.0 M/M)
+- ✅ 추가: 가입 시 학력/직업 기반 레벨 매핑 (Phase 1에 포함, 추가 공수 없음)
+- ✅ 추가: UI 레벨 전환 드롭다운 (Phase 2에 포함, 0.5 M/M)
+- ✅ 추가: 레벨별 사용 통계 대시보드 (Phase 3에 포함, 1.5 M/M)
 
 ---
 
@@ -1146,13 +1268,14 @@ L5 (전문가):
 | **상태 관리** | `workflow/state.py` | - |
 | **프롬프트** | `workflow/nodes/generator.py:544-565` | 확장 (L3~L6) |
 | **API 모델** | `api/models.py:434` | 확장 (ChatAskRequestV2) |
-| **리터러시 감지** | - | `workflow/detectors/literacy_detector.py` |
+| **레벨 매핑** | - | `workflow/user/level_mapper.py` |
 | **기술요소 추출** | - | `workflow/extractors/tech_elements.py` |
 | **용어 변환** | - | `workflow/processors/term_processor.py` |
 | **배치 추출** | - | `embedding/extract_tech_elements.py` |
 | **용어 사전 구축** | - | `scripts/build_term_dictionary.py` |
 | **Easy Mode UI** | - | `frontend/app/easy/page.tsx` |
-| **수준 선택 UI** | - | `frontend/components/LevelSelector.tsx` |
+| **레벨 전환 UI** | - | `frontend/components/LevelSwitcher.tsx` |
+| **가입 폼 UI** | - | `frontend/components/RegisterForm.tsx` |
 
 ## 부록 B: 데이터베이스 마이그레이션
 
