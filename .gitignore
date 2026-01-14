@@ -1,0 +1,108 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# Environment Variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+test_results.json
+
+# Next.js (Frontend)
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/build/
+frontend/*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Backup files
+*.bak
+*.backup
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Data files (large)
+data/
+*.csv
+*.parquet
+*.arrow
+
+# Model files
+models/
+*.onnx
+*.pt
+*.pth
+
+# Elasticsearch config (if using)
+config/elasticsearch/
+
+# Docker
+.dockerignore
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+
+# MacOS
+.AppleDouble
+.LSOverride
+
+# Windows
+desktop.ini
+
+# Cache
+.cache/
+*.cache
