@@ -283,9 +283,9 @@ async def stream_workflow_sse(request: StreamChatRequest) -> EventSourceResponse
             initial_state = create_initial_state(
                 query=request.query,
                 session_id=request.session_id,
-                level=request.level,  # Phase 103: 수준 전달
-                entity_types=request.entity_types  # Phase 103: 엔티티 타입 전달
+                level=request.level  # Phase 103 v1.3: V3 리터러시 레벨
             )
+            # Patent-AX: entity_types는 state.py에서 ["patent"]로 고정
 
             # 분석 단계 시작 알림
             yield {
@@ -913,8 +913,7 @@ async def stream_workflow_datastream(request: StreamChatRequest):
             initial_state = create_initial_state(
                 query=request.query,
                 session_id=request.session_id,
-                level=request.level,
-                entity_types=request.entity_types
+                level=request.level
             )
 
             # 워크플로우 스트리밍 실행
@@ -952,8 +951,7 @@ async def stream_workflow_chunks(request: StreamChatRequest) -> AsyncGenerator[s
         initial_state = create_initial_state(
             query=request.query,
             session_id=request.session_id,
-            level=request.level,
-            entity_types=request.entity_types
+            level=request.level
         )
 
         # 워크플로우 실행 (현재는 전체 응답 후 반환)
