@@ -254,7 +254,7 @@ class StreamChatRequest(BaseModel):
     query: str
     session_id: str = "default"
     system_prompt: Optional[str] = None
-    level: Literal["초등", "일반인", "전문가"] = "일반인"  # Phase 103: 수준 선택
+    level: Literal["L1", "L2", "L3", "L4", "L5", "L6", "초등", "일반인", "전문가"] = "L2"  # Phase 103 v1.3: V3 리터러시 레벨 지원
     entity_types: Optional[List[str]] = None  # Phase 103: 엔티티 타입 필터
 
 
