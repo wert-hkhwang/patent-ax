@@ -14,39 +14,12 @@ import logging
 
 from workflow.loaders.base_loader import BaseLoader
 
-# 구현된 Loader import
+# 구현된 Loader import (존재하는 모듈만)
 from workflow.loaders.patent_ranking_loader import (
     PatentRankingLoader,
     PatentCitationLoader,
     PatentInfluenceLoader,
     PatentNationalityLoader,
-)
-from workflow.loaders.collaboration_loader import CollaborationLoader
-from workflow.loaders.equipment_kpi_loader import (
-    EquipmentKPILoader,
-    EquipmentByNameLoader,
-    EquipmentByOrgLoader,
-    EquipmentRegionLoader,
-)
-from workflow.loaders.announcement_loader import (
-    AnnouncementScoringLoader,
-    AnnouncementAdvantageLoader,
-    PreferredAnnouncementLoader,
-)
-from workflow.loaders.tech_classification_loader import (
-    TechClassification6TLoader,
-    TechClassificationIndustrialLoader,
-    TechClassificationNTISLoader,
-    TechClassificationKSICLoader,
-    TechClassificationNationalLoader,
-    TechClassification10MajorLoader,
-    TechClassificationKeyLoader,
-    TechClassificationNTRMLoader,
-    TechClassificationApplicationLoader,
-)
-from workflow.loaders.project_loader import (
-    ProjectKPILoader,
-    ProjectProgramLoader,
 )
 
 logger = logging.getLogger(__name__)
@@ -213,37 +186,13 @@ def _get_or_create_loader(
     # 현재는 구현된 Loader만 반환
     # 추후 Loader 구현 시 여기서 동적 import
 
-    # 구현된 Loader 매핑
+    # 구현된 Loader 매핑 (존재하는 모듈만)
     implemented_loaders = {
         # 특허 순위
         "PatentRankingLoader": PatentRankingLoader,
         "PatentCitationLoader": PatentCitationLoader,
         "PatentInfluenceLoader": PatentInfluenceLoader,
         "PatentNationalityLoader": PatentNationalityLoader,
-        # 협업 기업 추천
-        "CollaborationLoader": CollaborationLoader,
-        # 장비 검색
-        "EquipmentKPILoader": EquipmentKPILoader,
-        "EquipmentByNameLoader": EquipmentByNameLoader,
-        "EquipmentByOrgLoader": EquipmentByOrgLoader,
-        "EquipmentRegionLoader": EquipmentRegionLoader,
-        # 사업공고/배점표
-        "AnnouncementScoringLoader": AnnouncementScoringLoader,
-        "AnnouncementAdvantageLoader": AnnouncementAdvantageLoader,
-        "PreferredAnnouncementLoader": PreferredAnnouncementLoader,
-        # 기술분류 추천
-        "TechClassification6TLoader": TechClassification6TLoader,
-        "TechClassificationIndustrialLoader": TechClassificationIndustrialLoader,
-        "TechClassificationNTISLoader": TechClassificationNTISLoader,
-        "TechClassificationKSICLoader": TechClassificationKSICLoader,
-        "TechClassificationNationalLoader": TechClassificationNationalLoader,
-        "TechClassification10MajorLoader": TechClassification10MajorLoader,
-        "TechClassificationKeyLoader": TechClassificationKeyLoader,
-        "TechClassificationNTRMLoader": TechClassificationNTRMLoader,
-        "TechClassificationApplicationLoader": TechClassificationApplicationLoader,
-        # 정부과제
-        "ProjectKPILoader": ProjectKPILoader,
-        "ProjectProgramLoader": ProjectProgramLoader,
     }
 
     loader_class = implemented_loaders.get(loader_name)
@@ -293,35 +242,11 @@ def get_loader_class(loader_name: str) -> Optional[Type[BaseLoader]]:
         Loader 클래스 또는 None
     """
     implemented_loaders = {
-        # 특허 순위
+        # 특허 순위 (존재하는 모듈만)
         "PatentRankingLoader": PatentRankingLoader,
         "PatentCitationLoader": PatentCitationLoader,
         "PatentInfluenceLoader": PatentInfluenceLoader,
         "PatentNationalityLoader": PatentNationalityLoader,
-        # 협업 기업 추천
-        "CollaborationLoader": CollaborationLoader,
-        # 장비 검색
-        "EquipmentKPILoader": EquipmentKPILoader,
-        "EquipmentByNameLoader": EquipmentByNameLoader,
-        "EquipmentByOrgLoader": EquipmentByOrgLoader,
-        "EquipmentRegionLoader": EquipmentRegionLoader,
-        # 사업공고/배점표
-        "AnnouncementScoringLoader": AnnouncementScoringLoader,
-        "AnnouncementAdvantageLoader": AnnouncementAdvantageLoader,
-        "PreferredAnnouncementLoader": PreferredAnnouncementLoader,
-        # 기술분류 추천
-        "TechClassification6TLoader": TechClassification6TLoader,
-        "TechClassificationIndustrialLoader": TechClassificationIndustrialLoader,
-        "TechClassificationNTISLoader": TechClassificationNTISLoader,
-        "TechClassificationKSICLoader": TechClassificationKSICLoader,
-        "TechClassificationNationalLoader": TechClassificationNationalLoader,
-        "TechClassification10MajorLoader": TechClassification10MajorLoader,
-        "TechClassificationKeyLoader": TechClassificationKeyLoader,
-        "TechClassificationNTRMLoader": TechClassificationNTRMLoader,
-        "TechClassificationApplicationLoader": TechClassificationApplicationLoader,
-        # 정부과제
-        "ProjectKPILoader": ProjectKPILoader,
-        "ProjectProgramLoader": ProjectProgramLoader,
     }
     return implemented_loaders.get(loader_name)
 

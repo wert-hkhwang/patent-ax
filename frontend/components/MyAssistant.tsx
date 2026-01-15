@@ -23,12 +23,8 @@ import {
 } from "@/types/workflow";
 import type { SearchMode, UserLevel } from "@/app/page";
 
-// 백엔드 API URL
-// 외부 접속 시 서버 IP 사용, 환경변수로 오버라이드 가능
-const API_URL = process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== "undefined" && window.location.hostname !== "localhost"
-    ? `http://${window.location.hostname}:8000`
-    : "http://localhost:8000");
+// 백엔드 API URL (프록시 사용)
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 // 워크플로우 상태
 interface WorkflowState {
@@ -91,11 +87,7 @@ function useStreamingChat(searchMode: SearchMode, level: UserLevel) {
         level: level,  // Phase 103: 수준 전달
       };
 
-      // AX 모드: 특허 전용 검색 (entity_types=["patent"])
-      if (searchMode === "ax") {
-        requestBody.entity_types = ["patent"];
-      }
-      // 통합검색 모드: entity_types 없음 (모든 엔티티 검색)
+      // entity_types는 백엔드에서 자동으로 ["patent"]로 설정됨
 
       const response = await fetch(`${API_URL}/workflow/chat/stream`, {
         method: "POST",

@@ -4,11 +4,8 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-// 백엔드 API URL
-const API_URL = process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== "undefined" && window.location.hostname !== "localhost"
-    ? `http://${window.location.hostname}:8000`
-    : "http://localhost:8000");
+// 백엔드 API URL (프록시 사용)
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 interface Message {
   role: "user" | "assistant";
@@ -66,7 +63,6 @@ export function EasyChat({ selectedQuestion, onQuestionSent }: EasyChatProps) {
         query: content,
         session_id: "easy_mode",
         level: "L1", // 초등학생 레벨
-        entity_types: ["patent"], // 특허 전용
       };
 
       const response = await fetch(`${API_URL}/workflow/chat/stream`, {
@@ -89,6 +85,7 @@ export function EasyChat({ selectedQuestion, onQuestionSent }: EasyChatProps) {
       }
 
       let accumulatedText = "";
+      let currentEvent = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -98,27 +95,33 @@ export function EasyChat({ selectedQuestion, onQuestionSent }: EasyChatProps) {
         const lines = chunk.split("\n");
 
         for (const line of lines) {
+          // event: 라인 처리
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+            continue;
+          }
+
+          // data: 라인 처리
           if (line.startsWith("data: ")) {
             const data = line.slice(6);
             if (data === "[DONE]") continue;
 
-            try {
-              const parsed = JSON.parse(data);
-
-              if (parsed.event === "text" && parsed.data) {
-                accumulatedText += parsed.data;
-                setMessages((prev) => {
-                  const newMessages = [...prev];
-                  newMessages[newMessages.length - 1] = {
-                    role: "assistant",
-                    content: accumulatedText,
-                  };
-                  return newMessages;
-                });
-              }
-            } catch (e) {
-              // JSON 파싱 오류 무시
+            // text 이벤트의 경우 직접 텍스트로 처리
+            if (currentEvent === "text") {
+              // 이스케이프된 \n을 실제 줄바꿈으로 변환
+              const textContent = data.replace(/\\n/g, "\n");
+              accumulatedText += textContent;
+              setMessages((prev) => {
+                const newMessages = [...prev];
+                newMessages[newMessages.length - 1] = {
+                  role: "assistant",
+                  content: accumulatedText,
+                };
+                return newMessages;
+              });
             }
+
+            currentEvent = ""; // 이벤트 초기화
           }
         }
       }
