@@ -236,6 +236,9 @@ class AgentState(TypedDict, total=False):
     # === Phase 102: 신뢰도 점수 ===
     context_quality: float              # 컨텍스트 품질 점수 (0.0~1.0)
 
+    # === Phase 104: 관점별 요약 ===
+    perspective_summary: Optional[Dict[str, Dict[str, str]]]  # 관점별 요약 {purpose: {original, explanation}, ...}
+
 
 def create_initial_state(
     query: str,

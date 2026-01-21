@@ -715,6 +715,25 @@ async def stream_workflow_sse(request: StreamChatRequest) -> EventSourceResponse
                             }
                             final_state = node_output
 
+                        # Phase 104: 관점별 요약 이벤트 전송 (목적/소재/공법/효과)
+                        # 새 구조: {purpose: {original, explanation}, material: {original, explanation}, ...}
+                        perspective_summary = node_output.get("perspective_summary", {})
+                        if perspective_summary and isinstance(perspective_summary, dict):
+                            # 필수 필드 존재 확인 (새 구조)
+                            required_keys = ["purpose", "material", "method", "effect"]
+                            if all(key in perspective_summary for key in required_keys):
+                                # 새 구조 형식으로 전송 (original + explanation)
+                                yield {
+                                    "event": "perspective_summary",
+                                    "data": safe_json_dumps({
+                                        "purpose": perspective_summary.get("purpose", {"original": "", "explanation": ""}),
+                                        "material": perspective_summary.get("material", {"original": "", "explanation": ""}),
+                                        "method": perspective_summary.get("method", {"original": "", "explanation": ""}),
+                                        "effect": perspective_summary.get("effect", {"original": "", "explanation": ""})
+                                    }, ensure_ascii=False)
+                                }
+                                logger.info(f"Phase 104: perspective_summary SSE 이벤트 전송 완료 (원본+설명 구조)")
+
             # 완료 이벤트
             if final_state:
                 # 단계별 타이밍 이벤트 (시각화용)

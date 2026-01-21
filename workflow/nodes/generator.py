@@ -700,7 +700,7 @@ LEVEL_PROMPTS = {
 
 # 수준별 응답 길이 조절 (max_tokens)
 TOKEN_LIMITS_V3 = {
-    "L1": 1000,   # 짧고 간결
+    "L1": 1500,   # Phase 104.1: 1000 → 1500 (개념 설명 충분히 표시)
     "L2": 2000,   # 중간
     "L3": 2500,   # 실무 상세
     "L4": 3500,   # 기술 심층
@@ -714,6 +714,297 @@ TOKEN_LIMITS_LEGACY = {
     "일반인": TOKEN_LIMITS_V3["L2"],
     "전문가": TOKEN_LIMITS_V3["L5"]
 }
+
+# ========================================
+# Phase 104: 관점별 요약 시스템 (목적/소재/공법/효과)
+# 특허 문서 구조 기반 체계적 답변 생성
+# ========================================
+
+PERSPECTIVE_SYSTEM_PROMPT = """당신은 특허 문서 분석 전문가입니다.
+검색된 특허 정보를 다음 4가지 관점으로 구조화하여 설명하세요.
+
+## 4가지 관점 정의
+
+1. **목적 (Purpose)**: 특허가 해결하려는 과제/문제
+   - 데이터 소스: objectko (해결과제) 필드
+   - 기존 기술의 한계, 발명이 필요한 이유
+
+2. **소재 (Material)**: 사용되는 주요 소재, 물질, 기술 요소
+   - 데이터 소스: IPC 분류 및 기술 설명에서 추론
+   - 핵심 구성요소, 재료, 물질
+
+3. **공법 (Method)**: 구체적인 기술 구현 방법/절차
+   - 데이터 소스: solutionko (해결수단) 필드
+   - 제조 방법, 구현 절차, 기술적 단계
+
+4. **효과 (Effect)**: 기술 적용으로 인한 성과/개선점
+   - 데이터 소스: patent_abstc_ko (초록)에서 추출
+   - 성능 향상, 비용 절감, 품질 개선 등
+
+{level_instruction}
+
+## 응답 형식 (JSON)
+반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트를 추가하지 마세요.
+
+```json
+{{
+  "purpose": "목적 설명 (2-4문장)",
+  "material": "소재 설명 (2-4문장)",
+  "method": "공법 설명 (2-4문장)",
+  "effect": "효과 설명 (2-4문장)"
+}}
+```
+"""
+
+# 관점별 레벨 지침 (L1~L6)
+PERSPECTIVE_LEVEL_INSTRUCTIONS = {
+    "L1": """
+**L1 (초등학생) 수준 설명**:
+- 모든 전문용어를 쉬운 말로 바꿔 설명
+- 일상생활 비유 사용 ("마치 ~처럼")
+- 문장을 짧게 (10단어 이내)
+- 이모지 활용 가능 (🔋⚡🚗💡)""",
+
+    "L2": """
+**L2 (대학생/일반인) 수준 설명**:
+- 전문용어 사용하되 괄호 안에 간단한 설명 추가
+- 예: "양극재(배터리의 양극 활물질)"
+- 학술적 표현 가능 ("~의 원리는...", "~의 특성은...")""",
+
+    "L3": """
+**L3 (실무자) 수준 설명**:
+- 실무 적용 관점으로 설명
+- 사업화 가능성, 시장 규모 언급
+- 제품/공정과 연결하여 설명""",
+
+    "L4": """
+**L4 (연구자) 수준 설명**:
+- 기술 용어 그대로 사용 (설명 최소화)
+- 측정 방법, 수치 범위 포함
+- IPC 세부 코드 활용
+- 기술 공백/개선 가능성 제시""",
+
+    "L5": """
+**L5 (변리사/전문가) 수준 설명**:
+- 법률/심사 전문 용어 그대로 사용
+- 권리범위, 선행기술 매핑
+- 특허법 조항 언급 가능
+- 침해 분석 관점 포함""",
+
+    "L6": """
+**L6 (정책담당자) 수준 설명**:
+- 거시적 관점으로 설명
+- 산업 전체 맥락, 국가별 비교
+- 정책적 시사점 도출
+- 기술무역수지, 특허 패밀리 등 거시 지표"""
+}
+
+
+def _extract_perspective_data(state: AgentState) -> dict:
+    """특허 데이터에서 관점별 원시 데이터 추출
+
+    Args:
+        state: 현재 에이전트 상태
+
+    Returns:
+        관점별 원시 데이터 딕셔너리
+    """
+    perspective_data = {
+        "objectko_samples": [],
+        "solutionko_samples": [],
+        "abstc_samples": [],
+        "ipc_codes": []
+    }
+
+    # RAG 결과에서 추출
+    rag_results = state.get("rag_results", [])
+    for result in rag_results[:5]:  # 상위 5개만
+        if isinstance(result, dict):
+            metadata = result.get("metadata", {})
+        else:
+            metadata = getattr(result, "metadata", {}) or {}
+
+        # Phase 104.1: sql_details에서도 데이터 추출 (RAG 결과 보강 시 여기에 저장됨)
+        sql_details = metadata.get("sql_details", {})
+
+        # sql_details 우선, 없으면 metadata에서 찾기
+        objectko = sql_details.get("objectko") or metadata.get("objectko")
+        solutionko = sql_details.get("solutionko") or metadata.get("solutionko")
+        patent_abstc_ko = sql_details.get("patent_abstc_ko") or metadata.get("patent_abstc_ko")
+        ipc_main = sql_details.get("ipc_main") or metadata.get("ipc_main")
+
+        if objectko:
+            perspective_data["objectko_samples"].append(objectko[:500])
+        if solutionko:
+            perspective_data["solutionko_samples"].append(solutionko[:500])
+        if patent_abstc_ko:
+            perspective_data["abstc_samples"].append(patent_abstc_ko[:500])
+        if ipc_main:
+            perspective_data["ipc_codes"].append(ipc_main)
+
+    # SQL 결과에서 추출
+    sql_result = state.get("sql_result")
+    if sql_result and hasattr(sql_result, "rows") and sql_result.rows:
+        columns = sql_result.columns if hasattr(sql_result, "columns") else []
+        col_map = {col.lower(): idx for idx, col in enumerate(columns)}
+
+        for row in sql_result.rows[:5]:
+            if "objectko" in col_map and row[col_map["objectko"]]:
+                perspective_data["objectko_samples"].append(str(row[col_map["objectko"]])[:500])
+            if "solutionko" in col_map and row[col_map["solutionko"]]:
+                perspective_data["solutionko_samples"].append(str(row[col_map["solutionko"]])[:500])
+            if "patent_abstc_ko" in col_map and row[col_map["patent_abstc_ko"]]:
+                perspective_data["abstc_samples"].append(str(row[col_map["patent_abstc_ko"]])[:500])
+            if "ipc_main" in col_map and row[col_map["ipc_main"]]:
+                perspective_data["ipc_codes"].append(str(row[col_map["ipc_main"]]))
+
+    return perspective_data
+
+
+def _generate_perspective_summary(state: AgentState, llm, level: str) -> dict:
+    """관점별 요약 생성 - 원본 데이터 + 레벨별 부연 설명
+
+    Args:
+        state: 현재 에이전트 상태
+        llm: LLM 클라이언트
+        level: 리터러시 레벨 (L1~L6)
+
+    Returns:
+        관점별 요약 딕셔너리 {"purpose": {"original": ..., "explanation": ...}, ...}
+    """
+    perspective_data = _extract_perspective_data(state)
+
+    # 데이터가 없으면 빈 결과 반환
+    if not any(perspective_data.values()):
+        logger.info("Phase 104: 관점별 데이터 없음 - 요약 생성 스킵")
+        return {}
+
+    # 원본 데이터 구조 초기화
+    summary = {
+        "purpose": {"original": "", "explanation": ""},
+        "material": {"original": "", "explanation": ""},
+        "method": {"original": "", "explanation": ""},
+        "effect": {"original": "", "explanation": ""},
+    }
+
+    # 원본 데이터 추출 (검색된 특허 문서에서)
+    if perspective_data["objectko_samples"]:
+        summary["purpose"]["original"] = perspective_data["objectko_samples"][0][:500]
+
+    if perspective_data["solutionko_samples"]:
+        solution = perspective_data["solutionko_samples"][0][:500]
+        summary["material"]["original"] = solution
+        summary["method"]["original"] = solution
+
+    if perspective_data["abstc_samples"]:
+        summary["effect"]["original"] = perspective_data["abstc_samples"][0][:500]
+
+    # 원본 데이터가 없으면 빈 결과 반환
+    if not any(s["original"] for s in summary.values()):
+        logger.info("Phase 104: 원본 데이터 없음 - 요약 생성 스킵")
+        return {}
+
+    # 레벨별 부연 설명 생성 (LLM 사용)
+    try:
+        explanations = _generate_level_explanations(summary, llm, level)
+        for key in summary:
+            if key in explanations and explanations[key]:
+                summary[key]["explanation"] = explanations[key]
+        logger.info(f"Phase 104: 관점별 요약 생성 완료 - 레벨 {level}")
+    except Exception as e:
+        logger.warning(f"Phase 104: 부연 설명 생성 실패 (원본 데이터는 유지) - {e}")
+
+    return summary
+
+
+def _generate_level_explanations(summary: dict, llm, level: str) -> dict:
+    """레벨에 맞는 부연 설명 생성
+
+    Args:
+        summary: 원본 데이터가 포함된 요약 딕셔너리
+        llm: LLM 클라이언트
+        level: 리터러시 레벨 (L1~L6)
+
+    Returns:
+        설명 딕셔너리 {"purpose": "...", "material": "...", "method": "...", "effect": "..."}
+    """
+    import json
+    import re
+
+    # 레벨별 스타일과 분량 가이드
+    level_configs = {
+        "L1": {
+            "style": "초등학생도 이해할 수 있게 비유와 이모지를 사용해서 친근하게",
+            "length": "2~3문장 (80~120자)",
+            "example": "🔋 배터리는 전기를 저장하는 통이에요! 이 기술은 그 통을 더 크고 튼튼하게 만들어서 핸드폰이나 전기차가 더 오래 갈 수 있게 해줘요."
+        },
+        "L2": {
+            "style": "일반인이 이해할 수 있게 전문용어는 풀어서 설명하며",
+            "length": "2~3문장 (100~150자)",
+            "example": "리튬이온 배터리의 양극재 성능을 높이는 기술입니다. 양극재는 배터리에서 전기를 저장하는 핵심 부품으로, 이 기술을 통해 충전 용량과 수명이 개선됩니다."
+        },
+        "L3": {
+            "style": "중소기업 실무자가 사업화 관점에서 이해할 수 있게 실용적으로",
+            "length": "2~3문장 (100~150자)",
+            "example": "기존 공정 대비 제조 비용을 20% 절감하면서 성능은 유지하는 양극재 제조 기술입니다. 기존 설비를 활용할 수 있어 초기 투자 부담이 낮습니다."
+        },
+        "L4": {
+            "style": "연구자가 기술적 특징을 파악할 수 있게 정확한 용어를 사용해서",
+            "length": "2~3문장 (100~150자)",
+            "example": "NCM 양극재의 Ni 함량을 80% 이상으로 높이면서 열안정성을 확보하는 표면 코팅 기술입니다. Al₂O₃ 나노코팅으로 계면 저항을 최소화합니다."
+        },
+        "L5": {
+            "style": "변리사/심사관이 권리범위와 진보성을 파악할 수 있게 법적 관점에서",
+            "length": "2~3문장 (100~150자)",
+            "example": "청구항 1의 구성요소 조합이 선행기술 대비 에너지 밀도 15% 향상의 현저한 효과를 나타내어 진보성이 인정될 수 있습니다."
+        },
+        "L6": {
+            "style": "정책담당자가 산업적 파급효과를 이해할 수 있게 거시적으로",
+            "length": "2~3문장 (100~150자)",
+            "example": "국내 이차전지 소재 자립도를 높이는 핵심 기술로, 일본/중국 의존도를 낮추고 국내 소재 기업의 경쟁력 강화에 기여할 수 있습니다."
+        },
+    }
+
+    config = level_configs.get(level, level_configs["L2"])
+
+    prompt = f"""아래 특허 원문을 읽고, {config["style"]} 부연 설명을 작성하세요.
+
+[원문 - 목적/해결과제]
+{summary["purpose"]["original"][:300] or "(정보 없음)"}
+
+[원문 - 소재/구성]
+{summary["material"]["original"][:300] or "(정보 없음)"}
+
+[원문 - 효과]
+{summary["effect"]["original"][:300] or "(정보 없음)"}
+
+[작성 가이드]
+- 분량: 각 항목당 {config["length"]}
+- 원문 내용을 기반으로 하되, 이해하기 쉽게 풀어서 설명
+- 예시 톤: "{config["example"][:50]}..."
+
+[출력 형식 - JSON만 출력]
+{{"purpose": "목적 설명...", "material": "소재 설명...", "method": "방법 설명...", "effect": "효과 설명..."}}"""
+
+    try:
+        response = llm.generate(prompt=prompt, max_tokens=800, temperature=0.4)
+
+        # JSON 파싱 (중첩 객체 허용)
+        json_match = re.search(r'\{[^{}]*"purpose"[^{}]*\}', response, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+
+        # 더 넓은 패턴 시도
+        json_match = re.search(r'\{.*?\}', response, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+    except json.JSONDecodeError as e:
+        logger.warning(f"Phase 104: 부연 설명 JSON 파싱 실패 - {e}")
+    except Exception as e:
+        logger.warning(f"Phase 104: 부연 설명 생성 예외 - {e}")
+
+    return {}
+
 
 # 간단한 응답용 프롬프트
 SIMPLE_RESPONSE_PROMPT = """당신은 친절한 R&D 데이터 분석 도우미입니다.
@@ -791,7 +1082,7 @@ def generate_response(state: AgentState) -> AgentState:
             # Phase 99.5/99.6: ES 통계 결과가 있으면 직접 테이블 생성
             es_statistics = state.get("es_statistics")
             statistics_type = state.get("statistics_type")
-            print(f"[GENERATOR] Phase 99.5/99.6 확인: es_statistics={bool(es_statistics)}, statistics_type={statistics_type}, keys={list(state.keys())[:20]}")
+            # Phase 99.5/99.6 확인 (디버그 제거됨)
 
             # Phase 99.6: crosstab_analysis (출원기관별 연도별 크로스탭)
             if es_statistics and statistics_type == "crosstab_analysis":
@@ -1053,6 +1344,26 @@ def generate_response(state: AgentState) -> AgentState:
                 temperature=0.3
             )
 
+            # Phase 104: 관점별 요약 생성 (특허 검색 쿼리에만 적용)
+            # Phase 104.2: SQL 결과 또는 RAG 결과가 있으면 관점별 요약 시도
+            perspective_summary = {}
+            entity_types = state.get("entity_types", [])
+            is_patent_query = "patent" in entity_types or query_type in ["sql", "rag", "hybrid"]
+            has_rag_results = bool(state.get("rag_results"))
+            has_sql_result = bool(state.get("sql_result"))
+            rag_results_count = len(state.get("rag_results", []))
+
+            logger.info(f"Phase 104 조건 검사: entity_types={entity_types}, query_type={query_type}, is_patent_query={is_patent_query}, has_rag_results={has_rag_results}, has_sql_result={has_sql_result}, rag_count={rag_results_count}")
+
+            # SQL 결과 또는 RAG 결과가 있으면 관점별 요약 생성 시도
+            if is_patent_query and (has_rag_results or has_sql_result):
+                try:
+                    perspective_summary = _generate_perspective_summary(state, llm, level)
+                    if perspective_summary:
+                        logger.info(f"Phase 104: 관점별 요약 생성 성공 - {list(perspective_summary.keys())}")
+                except Exception as e:
+                    logger.error(f"Phase 104: 관점별 요약 생성 실패 (메인 응답은 정상) - {e}")
+
         # 대화 기록 업데이트
         new_messages = [
             ChatMessage(role="user", content=query),
@@ -1065,6 +1376,7 @@ def generate_response(state: AgentState) -> AgentState:
             **state,
             "response": response,
             "context_quality": context_quality,  # Phase 102: 신뢰도 점수 반환
+            "perspective_summary": perspective_summary,  # Phase 104: 관점별 요약
             "conversation_history": new_messages
         }
 

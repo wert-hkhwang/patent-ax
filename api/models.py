@@ -473,6 +473,14 @@ class GraphData(BaseModel):
     edges: List[GraphEdge] = Field(default=[], description="엣지 목록")
 
 
+class PerspectiveSummary(BaseModel):
+    """관점별 요약 (특허 문서 구조 기반)"""
+    purpose: str = Field(..., description="목적: 특허가 해결하려는 과제/문제 (objectko 기반)")
+    material: str = Field(..., description="소재: 사용되는 주요 소재/기술 요소 (IPC 분류 기반)")
+    method: str = Field(..., description="공법: 구체적인 기술 구현 방법 (solutionko 기반)")
+    effect: str = Field(..., description="효과: 기술 적용으로 인한 성과/개선점 (초록 기반)")
+
+
 class ChatAskResponse(BaseModel):
     """AI 질의응답 응답 (/chat/ask)"""
     workflow: WorkflowStatus = Field(..., description="워크플로우 상태")
@@ -489,6 +497,10 @@ class ChatAskResponse(BaseModel):
     graph_data: Optional[GraphData] = Field(
         default=None,
         description="시각화용 그래프 데이터 (특허 + 1-hop 관련 엔티티)"
+    )
+    perspective_summary: Optional[PerspectiveSummary] = Field(
+        default=None,
+        description="관점별 요약 (목적/소재/공법/효과)"
     )
     application_no: Optional[str] = Field(default=None, description="출원번호")
     application_date: Optional[str] = Field(default=None, description="출원일")

@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { PerspectiveTabs, PerspectiveSummary } from "../patent/PerspectiveTabs";
 
 // 백엔드 API URL (프록시 사용)
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
@@ -10,6 +11,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  perspectiveSummary?: PerspectiveSummary;  // Phase 104: 관점별 요약
 }
 
 interface EasyChatProps {
@@ -86,6 +88,7 @@ export function EasyChat({ selectedQuestion, onQuestionSent }: EasyChatProps) {
 
       let accumulatedText = "";
       let currentEvent = "";
+      let perspectiveSummaryData: PerspectiveSummary | undefined;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -116,9 +119,32 @@ export function EasyChat({ selectedQuestion, onQuestionSent }: EasyChatProps) {
                 newMessages[newMessages.length - 1] = {
                   role: "assistant",
                   content: accumulatedText,
+                  perspectiveSummary: perspectiveSummaryData,
                 };
                 return newMessages;
               });
+            }
+
+            // Phase 104: perspective_summary 이벤트 처리
+            if (currentEvent === "perspective_summary") {
+              try {
+                const parsedData = JSON.parse(data);
+                if (parsedData.purpose && parsedData.material && parsedData.method && parsedData.effect) {
+                  perspectiveSummaryData = parsedData as PerspectiveSummary;
+                  // 관점별 요약이 도착하면 메시지 업데이트
+                  setMessages((prev) => {
+                    const newMessages = [...prev];
+                    newMessages[newMessages.length - 1] = {
+                      ...newMessages[newMessages.length - 1],
+                      perspectiveSummary: perspectiveSummaryData,
+                    };
+                    return newMessages;
+                  });
+                  console.log("Phase 104: 관점별 요약 수신:", perspectiveSummaryData);
+                }
+              } catch (e) {
+                console.error("perspective_summary 파싱 오류:", e);
+              }
             }
 
             currentEvent = ""; // 이벤트 초기화
@@ -185,32 +211,44 @@ export function EasyChat({ selectedQuestion, onQuestionSent }: EasyChatProps) {
                 }`}
               >
                 {message.role === "assistant" ? (
-                  <div className="prose prose-lg max-w-none">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: ({ children }) => (
-                          <p className="text-xl leading-relaxed mb-3">
-                            {children}
-                          </p>
-                        ),
-                        strong: ({ children }) => (
-                          <strong className="font-bold text-blue-600">
-                            {children}
-                          </strong>
-                        ),
-                        ul: ({ children }) => (
-                          <ul className="list-disc list-inside space-y-2 text-lg">
-                            {children}
-                          </ul>
-                        ),
-                        li: ({ children }) => (
-                          <li className="ml-4">{children}</li>
-                        ),
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
+                  <div className="space-y-4">
+                    {/* Phase 104: 관점별 요약 탭 (있는 경우) */}
+                    {message.perspectiveSummary && (
+                      <PerspectiveTabs
+                        summary={message.perspectiveSummary}
+                        level="L1"
+                        className="mb-4"
+                      />
+                    )}
+
+                    {/* 기존 마크다운 응답 */}
+                    <div className="prose prose-lg max-w-none">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => (
+                            <p className="text-xl leading-relaxed mb-3">
+                              {children}
+                            </p>
+                          ),
+                          strong: ({ children }) => (
+                            <strong className="font-bold text-blue-600">
+                              {children}
+                            </strong>
+                          ),
+                          ul: ({ children }) => (
+                            <ul className="list-disc list-inside space-y-2 text-lg">
+                              {children}
+                            </ul>
+                          ),
+                          li: ({ children }) => (
+                            <li className="ml-4">{children}</li>
+                          ),
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-xl">{message.content}</p>
