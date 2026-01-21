@@ -140,7 +140,6 @@ export function EasyChat({ selectedQuestion, onQuestionSent }: EasyChatProps) {
                     };
                     return newMessages;
                   });
-                  console.log("Phase 104: 관점별 요약 수신:", perspectiveSummaryData);
                 }
               } catch (e) {
                 console.error("perspective_summary 파싱 오류:", e);

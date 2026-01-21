@@ -8,7 +8,7 @@
 import { NextRequest } from "next/server";
 
 // 백엔드 서버 URL (서버 사이드에서는 localhost 사용)
-const BACKEND_URL = "http://localhost:8000";
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
 export async function POST(request: NextRequest) {
   try {

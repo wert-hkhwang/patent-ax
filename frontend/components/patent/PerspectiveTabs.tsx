@@ -86,8 +86,7 @@ export function PerspectiveTabs({ summary, level = "L2", className = "" }: Persp
   const hasContent = (tabId: TabId): boolean => {
     const item = summary[tabId];
     if (!item) return false;
-    return (item.original && item.original.trim().length > 0) ||
-           (item.explanation && item.explanation.trim().length > 0);
+    return Boolean(item.original?.trim().length) || Boolean(item.explanation?.trim().length);
   };
 
   // 활성화된 탭의 색상 클래스 반환
