@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { PerspectiveTabs, PerspectiveSummary } from "../patent/PerspectiveTabs";
+import { PerspectiveTable, PerspectiveSummary } from "../patent/PerspectiveTable";
 
 // 백엔드 API URL (프록시 사용)
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
@@ -211,9 +211,9 @@ export function EasyChat({ selectedQuestion, onQuestionSent }: EasyChatProps) {
               >
                 {message.role === "assistant" ? (
                   <div className="space-y-4">
-                    {/* Phase 104: 관점별 요약 탭 (있는 경우) */}
+                    {/* 관점별 요약 표 (있는 경우) */}
                     {message.perspectiveSummary && (
-                      <PerspectiveTabs
+                      <PerspectiveTable
                         summary={message.perspectiveSummary}
                         level="L1"
                         className="mb-4"
